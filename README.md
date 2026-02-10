@@ -7,7 +7,7 @@ Automated daily status reporter for QA Dev namespace that sends reports to Rabbi
 - Monitors all pods in the `dev` namespace
 - Categorizes pods: Critical (CrashLoopBackOff), Warnings (high restarts), Healthy
 - Calculates health score
-- Sends report to RabbitMQ exchange `device_raw_data_exchange`
+- Sends report to RabbitMQ exchange `slack_send_message_queue`
 - Runs daily at 8:00 AM UTC via Kubernetes CronJob
 
 ## Message Format
