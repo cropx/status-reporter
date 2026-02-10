@@ -1,0 +1,234 @@
+pipeline {
+    agent any
+    
+    parameters {
+        booleanParam(
+            name: 'RUN_TEST', 
+            defaultValue: false, 
+            description: 'Create a manual test job after deployment?'
+        )
+        booleanParam(
+            name: 'FORCE_REBUILD', 
+            defaultValue: false, 
+            description: 'Force rebuild even if no changes detected?'
+        )
+    }
+    
+    environment {
+        PROJECT_ID = 'crx-dev-svc'
+        IMAGE_NAME = 'qa-status-reporter'
+        IMAGE_TAG = "${env.BUILD_NUMBER ?: 'latest'}"
+        GCR_IMAGE = "gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
+        GCR_IMAGE_LATEST = "gcr.io/${PROJECT_ID}/${IMAGE_NAME}:latest"
+        NAMESPACE = 'dev'
+        SOURCE_DIR = '/home/michael/qa-status-reporter'
+    }
+    
+    stages {
+        stage('Validate Files') {
+            steps {
+                dir("${SOURCE_DIR}") {
+                    script {
+                        echo "Validating required files exist"
+                        sh """
+                            ls -la
+                            test -f status_reporter.py || (echo "status_reporter.py not found!" && exit 1)
+                            test -f Dockerfile || (echo "Dockerfile not found!" && exit 1)
+                            test -f cronjob.yaml || (echo "cronjob.yaml not found!" && exit 1)
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                dir("${SOURCE_DIR}") {
+                    script {
+                        echo "Building Docker image: ${GCR_IMAGE}"
+                        sh """
+                            docker build \
+                                --no-cache=${params.FORCE_REBUILD} \
+                                -t ${GCR_IMAGE} \
+                                -t ${GCR_IMAGE_LATEST} \
+                                .
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Test Image Locally') {
+            steps {
+                script {
+                    echo "Testing Docker image"
+                    sh """
+                        docker run --rm ${GCR_IMAGE} python3 -c "import pika; print('✓ Pika installed')"
+                        docker run --rm ${GCR_IMAGE} kubectl version --client --short || echo "✓ kubectl installed"
+                    """
+                }
+            }
+        }
+        
+        stage('Configure Docker for GCR') {
+            steps {
+                script {
+                    echo "Configuring Docker authentication for GCR"
+                    sh """
+                        gcloud auth configure-docker gcr.io --quiet
+                    """
+                }
+            }
+        }
+        
+        stage('Push to GCR') {
+            steps {
+                script {
+                    echo "Pushing images to GCR"
+                    sh """
+                        docker push ${GCR_IMAGE}
+                        docker push ${GCR_IMAGE_LATEST}
+                    """
+                }
+            }
+        }
+        
+        stage('Update CronJob') {
+            steps {
+                dir("${SOURCE_DIR}") {
+                    script {
+                        echo "Updating CronJob in ${NAMESPACE} namespace"
+                        sh """
+                            kubectl apply -f cronjob.yaml
+                            kubectl rollout status cronjob/qa-status-reporter -n ${NAMESPACE} --timeout=60s || true
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    echo "Verifying CronJob configuration"
+                    sh """
+                        echo "=== CronJob Status ==="
+                        kubectl get cronjob qa-status-reporter -n ${NAMESPACE}
+                        
+                        echo ""
+                        echo "=== CronJob Details ==="
+                        kubectl describe cronjob qa-status-reporter -n ${NAMESPACE} | grep -A 10 "Schedule"
+                        
+                        echo ""
+                        echo "=== ConfigMap ==="
+                        kubectl get configmap qa-status-reporter-config -n ${NAMESPACE} -o yaml | grep -A 10 "data:"
+                    """
+                }
+            }
+        }
+        
+        stage('Manual Test Run') {
+            when {
+                expression { params.RUN_TEST == true }
+            }
+            steps {
+                script {
+                    echo "Creating manual test job"
+                    def timestamp = sh(script: 'date +%s', returnStdout: true).trim()
+                    def jobName = "test-run-${timestamp}"
+                    
+                    sh """
+                        # Create test job
+                        kubectl create job --from=cronjob/qa-status-reporter ${jobName} -n ${NAMESPACE}
+                        
+                        # Wait for pod to be created
+                        echo "Waiting for pod to be created..."
+                        sleep 5
+                        
+                        # Get pod status
+                        echo "=== Test Job Status ==="
+                        kubectl get jobs -n ${NAMESPACE} | grep ${jobName} || true
+                        
+                        echo ""
+                        echo "=== Test Pod Status ==="
+                        kubectl get pods -n ${NAMESPACE} -l app=qa-status-reporter --sort-by=.metadata.creationTimestamp | tail -5
+                        
+                        # Wait a bit for the job to complete
+                        echo ""
+                        echo "Waiting 30 seconds for job to complete..."
+                        sleep 30
+                        
+                        # Get logs
+                        echo ""
+                        echo "=== Test Job Logs ==="
+                        kubectl logs -n ${NAMESPACE} -l app=qa-status-reporter --tail=50 || echo "Pod not ready yet"
+                        
+                        # Check RabbitMQ queue
+                        echo ""
+                        echo "=== RabbitMQ Queue Status ==="
+                        kubectl exec -n ${NAMESPACE} rabitmq-cluster-server-0 -- \
+                            rabbitmqctl list_queues name messages | grep slack_send_message_queue || true
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                def message = """
+                ========================================
+                ✓ QA Status Reporter Deployed Successfully!
+                ========================================
+                Build Number: ${env.BUILD_NUMBER}
+                Image: ${GCR_IMAGE}
+                Latest Tag: ${GCR_IMAGE_LATEST}
+                Namespace: ${NAMESPACE}
+                Schedule: Daily at 8:00 AM UTC
+                
+                Next Steps:
+                1. Monitor queue: kubectl exec -n dev rabitmq-cluster-server-0 -- rabbitmqctl list_queues | grep slack
+                2. View logs: kubectl logs -n dev -l app=qa-status-reporter --tail=50
+                3. Check schedule: kubectl describe cronjob qa-status-reporter -n dev
+                
+                Manual test run: ${params.RUN_TEST ? 'YES' : 'NO'}
+                ========================================
+                """
+                echo message
+            }
+        }
+        failure {
+            script {
+                echo """
+                ========================================
+                ✗ Deployment Failed!
+                ========================================
+                Build Number: ${env.BUILD_NUMBER}
+                Check the console output above for details.
+                
+                Common issues:
+                - Docker build failures
+                - GCR push permission issues
+                - kubectl connection problems
+                - Invalid YAML syntax
+                ========================================
+                """
+            }
+        }
+        always {
+            script {
+                echo "Cleaning up Docker images"
+                sh """
+                    # Keep last 3 builds, remove older ones
+                    docker images gcr.io/${PROJECT_ID}/${IMAGE_NAME} --format "{{.Tag}}" | \
+                        grep -E '^[0-9]+\$' | sort -rn | tail -n +4 | \
+                        xargs -I {} docker rmi gcr.io/${PROJECT_ID}/${IMAGE_NAME}:{} || true
+                    
+                    # Clean up dangling images
+                    docker image prune -f || true
+                """
+            }
+        }
+    }
+}

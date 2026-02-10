@@ -1,0 +1,171 @@
+pipeline {
+    agent any
+    
+    parameters {
+        gitParameter branchFilter: 'origin/(.*)', defaultValue: 'main', name: 'BRANCHGIT', type: 'PT_BRANCH', sortMode:'ASCENDING_SMART', selectedValue:'DEFAULT', listSize:'10', quickFilterEnabled:true
+        booleanParam(name: 'RUN_TEST', defaultValue: false, description: 'Run a test job immediately after deployment')
+        booleanParam(name: 'FORCE_REBUILD', defaultValue: false, description: 'Force rebuild without cache')
+    }
+    
+    environment {
+        // Use Artifact Registry like gds_service (NOT GCR)
+        REPOSITORY_URL = 'us-east4-docker.pkg.dev'
+        PROJECT_NAME = 'crx-infra-svc'
+        DOCKER_REPO = 'crx-infra-docker'
+        ARTIFACT_ID = 'qa-status-reporter'
+        FULL_IMAGE_NAME = "${REPOSITORY_URL}/${PROJECT_NAME}/${DOCKER_REPO}/${ARTIFACT_ID}"
+        DOCKER_BUILDKIT = '1'
+        
+        // Kubernetes config (same as gds_service)
+        KUBERNETES_CLUSTER = 'dev-kubernetes'
+        KUBERNETES_ZONE = 'us-east4-a'
+        KUBERNETES_PROJECT = 'crx-dev-k8s'
+        KUBERNETES_NAMESPACE = 'dev'
+        
+        BRANCH = "${params.BRANCHGIT}"
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '3', artifactNumToKeepStr: '3'))
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout(
+                    [
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${env.BRANCH}"]],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [],
+                        submoduleCfg: [],
+                        userRemoteConfigs: [[url: env.GIT_URL]]
+                    ]
+                )
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def gitHash = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    def buildArgs = params.FORCE_REBUILD ? '--no-cache' : ''
+                    
+                    sh """
+                        docker build ${buildArgs} \\
+                            -t ${env.ARTIFACT_ID}:qa-latest \\
+                            -t ${env.FULL_IMAGE_NAME}:qa-latest \\
+                            -t ${env.FULL_IMAGE_NAME}:${gitHash} \\
+                            .
+                    """
+                }
+            }
+        }
+        
+        stage('Push to Artifact Registry') {
+            steps {
+                script {
+                    def gitHash = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    
+                    sh """
+                        # Artifact Registry uses gcloud auth automatically
+                        docker push ${env.FULL_IMAGE_NAME}:qa-latest
+                        docker push ${env.FULL_IMAGE_NAME}:${gitHash}
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh """
+                        gcloud container clusters get-credentials ${env.KUBERNETES_CLUSTER} \\
+                            --zone ${env.KUBERNETES_ZONE} \\
+                            --project ${env.KUBERNETES_PROJECT}
+                        
+                        # Update image in cronjob.yaml to use Artifact Registry
+                        sed -i 's|gcr.io/crx-dev-svc/qa-status-reporter:latest|${env.FULL_IMAGE_NAME}:qa-latest|g' cronjob.yaml
+                        
+                        kubectl apply -f cronjob.yaml
+                        
+                        echo "✅ CronJob deployed successfully"
+                        kubectl get cronjob qa-status-reporter -n ${env.KUBERNETES_NAMESPACE}
+                    """
+                }
+            }
+        }
+        
+        stage('Run Test Job') {
+            when {
+                expression { params.RUN_TEST }
+            }
+            steps {
+                script {
+                    def jobName = "qa-status-reporter-test-${BUILD_NUMBER}"
+                    sh """
+                        kubectl create job --from=cronjob/qa-status-reporter ${jobName} -n ${env.KUBERNETES_NAMESPACE}
+                        
+                        echo "Waiting for job to start..."
+                        sleep 5
+                        
+                        kubectl wait --for=condition=complete --timeout=120s job/${jobName} -n ${env.KUBERNETES_NAMESPACE} || true
+                        
+                        echo "=== Job Logs ==="
+                        kubectl logs job/${jobName} -n ${env.KUBERNETES_NAMESPACE} --tail=100
+                        
+                        echo "=== Checking RabbitMQ Queue ==="
+                        kubectl exec -n ${env.KUBERNETES_NAMESPACE} rabitmq-cluster-server-0 -- \\
+                            rabbitmqctl list_queues name messages | grep slack_send_message_queue || true
+                        
+                        echo "=== Cleanup test job ==="
+                        kubectl delete job ${jobName} -n ${env.KUBERNETES_NAMESPACE} || true
+                    """
+                }
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                script {
+                    def gitHash = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    
+                    sh """
+                        docker rmi ${env.ARTIFACT_ID}:qa-latest || true
+                        docker rmi ${env.FULL_IMAGE_NAME}:qa-latest || true
+                        docker rmi ${env.FULL_IMAGE_NAME}:${gitHash} || true
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            notifyBuild("SUCCESSFUL")
+        }
+        failure {
+            notifyBuild("FAILED")
+        }
+    }
+}
+
+def notifyBuild(String buildStatus = 'STARTED', String slackChannel = '#deployments-qa') {
+    buildStatus = buildStatus ?: 'SUCCESSFUL'
+    def colorCode = '#FF0000'
+    def triggeredBy = "${currentBuild.getBuildCauses()[0].shortDescription}"
+    def subject = "${buildStatus}: Deploy QA Status Reporter from branch [${env.BRANCH}] ${triggeredBy}"
+    
+    if (buildStatus == 'SUCCESSFUL') {
+        colorCode = '#00FF00'
+    } else if (buildStatus == 'STARTED') {
+        colorCode = '#FFFF00'
+    }
+    
+    // Send notifications
+    try {
+        slackSend(channel: slackChannel, color: colorCode, message: subject)
+    } catch (Exception e) {
+        echo "Failed to send Slack notification: ${e.message}"
+    }
+}
