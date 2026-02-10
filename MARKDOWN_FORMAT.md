@@ -127,19 +127,21 @@ Or use Slack's `mrkdwn` format directly - most Slack markdown is compatible!
 
 ---
 
-## 📊 Message Wrapper
+## 📦 Message Structure
 
 The complete message sent to RabbitMQ:
 
 ```json
 {
   "message": "<markdown text here>",
-  "source": "QA_LIVE"
+  "source": "QA_LIVE",
+  "channel": "C0ADXA2FXH9"
 }
 ```
 
 - **`message`**: Markdown-formatted status report
 - **`source`**: Identifier for the report source (`QA_LIVE`)
+- **`channel`**: Slack channel ID where message should be posted (`C0ADXA2FXH9`)
 
 ---
 
