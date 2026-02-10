@@ -147,13 +147,13 @@ The complete message sent to RabbitMQ:
 
 ### Check Latest Run
 ```bash
-kubectl logs -n dev -l app=qa-status-reporter --tail=50
+kubectl logs -n dev -l app=status-reporter --tail=50
 ```
 
 ### Manual Test
 ```bash
-kubectl create job --from=cronjob/qa-status-reporter test-markdown -n dev
-kubectl logs -n dev -l app=qa-status-reporter --tail=100
+kubectl create job --from=cronjob/status-reporter test-markdown -n dev
+kubectl logs -n dev -l app=status-reporter --tail=100
 ```
 
 ### View in RabbitMQ

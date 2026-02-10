@@ -12,7 +12,7 @@ pipeline {
         REPOSITORY_URL = 'us-east4-docker.pkg.dev'
         PROJECT_NAME = 'crx-infra-svc'
         DOCKER_REPO = 'crx-infra-docker'
-        ARTIFACT_ID = 'qa-status-reporter'
+        ARTIFACT_ID = 'status-reporter'
         FULL_IMAGE_NAME = "${REPOSITORY_URL}/${PROJECT_NAME}/${DOCKER_REPO}/${ARTIFACT_ID}"
         DOCKER_BUILDKIT = '1'
         
@@ -85,12 +85,12 @@ pipeline {
                             --project ${env.KUBERNETES_PROJECT}
                         
                         # Update image in cronjob.yaml to use Artifact Registry
-                        sed -i 's|gcr.io/crx-dev-svc/qa-status-reporter:latest|${env.FULL_IMAGE_NAME}:qa-latest|g' cronjob.yaml
+                        sed -i 's|gcr.io/crx-dev-svc/status-reporter:latest|${env.FULL_IMAGE_NAME}:qa-latest|g' cronjob.yaml
                         
                         kubectl apply -f cronjob.yaml
                         
                         echo "✅ CronJob deployed successfully"
-                        kubectl get cronjob qa-status-reporter -n ${env.KUBERNETES_NAMESPACE}
+                        kubectl get cronjob status-reporter -n ${env.KUBERNETES_NAMESPACE}
                     """
                 }
             }
@@ -102,9 +102,9 @@ pipeline {
             }
             steps {
                 script {
-                    def jobName = "qa-status-reporter-test-${BUILD_NUMBER}"
+                    def jobName = "status-reporter-test-${BUILD_NUMBER}"
                     sh """
-                        kubectl create job --from=cronjob/qa-status-reporter ${jobName} -n ${env.KUBERNETES_NAMESPACE}
+                        kubectl create job --from=cronjob/status-reporter ${jobName} -n ${env.KUBERNETES_NAMESPACE}
                         
                         echo "Waiting for job to start..."
                         sleep 5

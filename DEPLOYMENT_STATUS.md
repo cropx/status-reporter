@@ -18,7 +18,7 @@ All components deployed and tested successfully!
 
 ### 2. Docker Image
 - ✅ Built successfully
-- ✅ **Pushed to Artifact Registry:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter:qa-latest`
+- ✅ **Pushed to Artifact Registry:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter:qa-latest`
 - ✅ Using same registry as gds_service
 
 ### 3. Testing
@@ -28,10 +28,10 @@ All components deployed and tested successfully!
 - ✅ Manual test job completed successfully (Health Score: 93%)
 
 ### 4. Kubernetes Resources Deployed
-- ✅ ConfigMap: `qa-status-reporter-config`
-- ✅ ServiceAccount: `qa-status-reporter`  
+- ✅ ConfigMap: `status-reporter-config`
+- ✅ ServiceAccount: `status-reporter`  
 - ✅ Role & RoleBinding (RBAC)
-- ✅ CronJob: `qa-status-reporter` - **ACTIVE**
+- ✅ CronJob: `status-reporter` - **ACTIVE**
 
 ### 5. Configuration
 - ✅ RabbitMQ: Using `rabitmq-cluster` (internal DNS)
@@ -100,19 +100,19 @@ Healthy: 90 pods
 
 ### Viewing CronJob Status
 ```bash
-kubectl get cronjob qa-status-reporter -n dev
-kubectl describe cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
+kubectl describe cronjob status-reporter -n dev
 ```
 
 ### Manual Test Run
 ```bash
-kubectl create job --from=cronjob/qa-status-reporter manual-test -n dev
-kubectl logs -n dev -l app=qa-status-reporter --tail=100
+kubectl create job --from=cronjob/status-reporter manual-test -n dev
+kubectl logs -n dev -l app=status-reporter --tail=100
 ```
 
 ### View Latest Logs
 ```bash
-kubectl logs -n dev -l app=qa-status-reporter --tail=50
+kubectl logs -n dev -l app=status-reporter --tail=50
 ```
 
 ### Check RabbitMQ Queue
@@ -142,26 +142,26 @@ The CronJob will automatically:
 
 ### Check CronJob Status
 ```bash
-kubectl get cronjob qa-status-reporter -n dev
-kubectl describe cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
+kubectl describe cronjob status-reporter -n dev
 ```
 
 ### View Docker Image
 ```bash
 gcloud artifacts docker images list \
-  us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter
+  us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter
 ```
 
 ### Check Configuration
 ```bash
-kubectl get configmap qa-status-reporter-config -n dev -o yaml
+kubectl get configmap status-reporter-config -n dev -o yaml
 kubectl get secret rabbitmq-gds-qa -n dev -o yaml
 ```
 
 ### Check Permissions
 ```bash
 kubectl auth can-i get pods \
-  --as=system:serviceaccount:dev:qa-status-reporter -n dev
+  --as=system:serviceaccount:dev:status-reporter -n dev
 ```
 
 ### Monitor RabbitMQ
@@ -194,12 +194,12 @@ kubectl exec -n dev rabitmq-cluster-server-0 -- \
 
 ## 💡 Additional Notes
 
-- **Docker Image:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter:qa-latest`
+- **Docker Image:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter:qa-latest`
 - **RabbitMQ External IP:** 35.199.22.143 (for testing outside cluster)
 - **RabbitMQ Internal:** rabitmq-cluster (DNS name inside cluster)
 - **Queue:** slack_send_message_queue (messages are consumed/processed immediately)
 - **Namespace:** dev
-- **Service Account:** qa-status-reporter (with pod read permissions)
+- **Service Account:** status-reporter (with pod read permissions)
 - **Pattern:** Follows exact same deployment pattern as gds_service
 
 ---

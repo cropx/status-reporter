@@ -4,7 +4,7 @@
 set -e
 
 PROJECT_ID="crx-dev-svc"
-IMAGE_NAME="qa-status-reporter"
+IMAGE_NAME="status-reporter"
 IMAGE_TAG="latest"
 FULL_IMAGE="gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
 
@@ -33,10 +33,10 @@ echo ""
 echo "✓ Deployment complete!"
 echo ""
 echo "To test manually, run:"
-echo "  kubectl create job --from=cronjob/qa-status-reporter test-run-1 -n dev"
+echo "  kubectl create job --from=cronjob/status-reporter test-run-1 -n dev"
 echo ""
 echo "To check logs:"
-echo "  kubectl logs -n dev -l app=qa-status-reporter --tail=100"
+echo "  kubectl logs -n dev -l app=status-reporter --tail=100"
 echo ""
 echo "To view cronjob status:"
-echo "  kubectl get cronjob qa-status-reporter -n dev"
+echo "  kubectl get cronjob status-reporter -n dev"

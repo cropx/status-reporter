@@ -6,7 +6,7 @@ The original solution tried to use GCR (`gcr.io/crx-dev-svc`) but the service ac
 
 **After reviewing gds_service**, I found they use **Artifact Registry** instead:
 - **gds_service uses:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/gds-service`
-- **We should use:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter`
+- **We should use:** `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter`
 
 ## ✅ Solution
 
@@ -31,8 +31,8 @@ Use the **same Artifact Registry** that gds_service uses, which the jenkins-t375
 | **Registry** | `us-east4-docker.pkg.dev` | `us-east4-docker.pkg.dev` ✅ |
 | **Project** | `crx-infra-svc` | `crx-infra-svc` ✅ |
 | **Repo** | `crx-infra-docker` | `crx-infra-docker` ✅ |
-| **Artifact** | `gds-service` | `qa-status-reporter` |
-| **Full Path** | `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/gds-service` | `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter` |
+| **Artifact** | `gds-service` | `status-reporter` |
+| **Full Path** | `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/gds-service` | `us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter` |
 | **Tags** | `qa-latest`, `${gitHash}` | `qa-latest`, `${gitHash}` ✅ |
 | **K8s Cluster** | `dev-kubernetes` | `dev-kubernetes` ✅ |
 | **Namespace** | `dev` | `dev` ✅ |
@@ -46,7 +46,7 @@ Use the **same Artifact Registry** that gds_service uses, which the jenkins-t375
 # Connect to jenkins-t375
 bash ~/connect.sh qak
 
-cd ~/qa-status-reporter
+cd ~/status-reporter
 
 # Get latest files
 # (copy Jenkinsfile.artifactregistry and cronjob-artifactregistry.yaml from local machine)
@@ -55,7 +55,7 @@ cd ~/qa-status-reporter
 export REPOSITORY_URL="us-east4-docker.pkg.dev"
 export PROJECT_NAME="crx-infra-svc"
 export DOCKER_REPO="crx-infra-docker"
-export ARTIFACT_ID="qa-status-reporter"
+export ARTIFACT_ID="status-reporter"
 export FULL_IMAGE_NAME="${REPOSITORY_URL}/${PROJECT_NAME}/${DOCKER_REPO}/${ARTIFACT_ID}"
 
 docker build -t ${ARTIFACT_ID}:qa-latest -t ${FULL_IMAGE_NAME}:qa-latest .
@@ -65,8 +65,8 @@ docker push ${FULL_IMAGE_NAME}:qa-latest
 kubectl apply -f cronjob-artifactregistry.yaml
 
 # Test immediately
-kubectl create job --from=cronjob/qa-status-reporter test-$(date +%s) -n dev
-kubectl get pods -n dev -l app=qa-status-reporter -w
+kubectl create job --from=cronjob/status-reporter test-$(date +%s) -n dev
+kubectl get pods -n dev -l app=status-reporter -w
 ```
 
 ### Option 2: Jenkins Pipeline
@@ -105,17 +105,17 @@ The service account `tf-automation@crx-infra-svc.iam.gserviceaccount.com` alread
 ```bash
 # Check if image exists in Artifact Registry
 gcloud artifacts docker images list \
-  us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/qa-status-reporter
+  us-east4-docker.pkg.dev/crx-infra-svc/crx-infra-docker/status-reporter
 
 # Check CronJob status
-kubectl get cronjob qa-status-reporter -n dev
-kubectl describe cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
+kubectl describe cronjob status-reporter -n dev
 
 # Check for running pods
-kubectl get pods -n dev -l app=qa-status-reporter
+kubectl get pods -n dev -l app=status-reporter
 
 # View logs
-kubectl logs -n dev -l app=qa-status-reporter --tail=100
+kubectl logs -n dev -l app=status-reporter --tail=100
 
 # Check RabbitMQ queue
 kubectl exec -n dev rabitmq-cluster-server-0 -- \

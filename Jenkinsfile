@@ -3,7 +3,7 @@ pipeline {
     
     environment {
         PROJECT_ID = 'crx-dev-svc'
-        IMAGE_NAME = 'qa-status-reporter'
+        IMAGE_NAME = 'status-reporter'
         IMAGE_TAG = 'latest'
         GCR_IMAGE = "gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
         NAMESPACE = 'dev'
@@ -13,14 +13,14 @@ pipeline {
         stage('Checkout') {
             steps {
                 script {
-                    echo "Using files from ~/qa-status-reporter"
+                    echo "Using files from ~/status-reporter"
                 }
             }
         }
         
         stage('Build Docker Image') {
             steps {
-                dir('/home/michael/qa-status-reporter') {
+                dir('/home/michael/status-reporter') {
                     script {
                         echo "Building Docker image: ${GCR_IMAGE}"
                         sh """
@@ -55,7 +55,7 @@ pipeline {
         
         stage('Deploy/Update CronJob') {
             steps {
-                dir('/home/michael/qa-status-reporter') {
+                dir('/home/michael/status-reporter') {
                     script {
                         echo "Applying CronJob manifest to ${NAMESPACE} namespace"
                         sh """
@@ -71,8 +71,8 @@ pipeline {
                 script {
                     echo "Verifying CronJob deployment"
                     sh """
-                        kubectl get cronjob qa-status-reporter -n ${NAMESPACE}
-                        kubectl describe cronjob qa-status-reporter -n ${NAMESPACE} | grep -A 3 "Schedule"
+                        kubectl get cronjob status-reporter -n ${NAMESPACE}
+                        kubectl describe cronjob status-reporter -n ${NAMESPACE} | grep -A 3 "Schedule"
                     """
                 }
             }
@@ -87,10 +87,10 @@ pipeline {
                     echo "Creating test job"
                     def timestamp = sh(script: 'date +%s', returnStdout: true).trim()
                     sh """
-                        kubectl create job --from=cronjob/qa-status-reporter test-run-${timestamp} -n ${NAMESPACE}
+                        kubectl create job --from=cronjob/status-reporter test-run-${timestamp} -n ${NAMESPACE}
                         sleep 10
                         kubectl get jobs -n ${NAMESPACE} | grep test-run-${timestamp}
-                        kubectl get pods -n ${NAMESPACE} -l app=qa-status-reporter
+                        kubectl get pods -n ${NAMESPACE} -l app=status-reporter
                     """
                 }
             }
@@ -108,8 +108,8 @@ pipeline {
             Schedule: Daily at 8:00 AM UTC
             
             To verify:
-            - kubectl get cronjob qa-status-reporter -n dev
-            - kubectl logs -n dev -l app=qa-status-reporter --tail=50
+            - kubectl get cronjob status-reporter -n dev
+            - kubectl logs -n dev -l app=status-reporter --tail=50
             ========================================
             """
         }

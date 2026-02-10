@@ -16,12 +16,12 @@ pipeline {
     
     environment {
         PROJECT_ID = 'crx-dev-svc'
-        IMAGE_NAME = 'qa-status-reporter'
+        IMAGE_NAME = 'status-reporter'
         IMAGE_TAG = "${env.BUILD_NUMBER ?: 'latest'}"
         GCR_IMAGE = "gcr.io/${PROJECT_ID}/${IMAGE_NAME}:${IMAGE_TAG}"
         GCR_IMAGE_LATEST = "gcr.io/${PROJECT_ID}/${IMAGE_NAME}:latest"
         NAMESPACE = 'dev'
-        SOURCE_DIR = '/home/michael/qa-status-reporter'
+        SOURCE_DIR = '/home/michael/status-reporter'
     }
     
     stages {
@@ -100,7 +100,7 @@ pipeline {
                         echo "Updating CronJob in ${NAMESPACE} namespace"
                         sh """
                             kubectl apply -f cronjob.yaml
-                            kubectl rollout status cronjob/qa-status-reporter -n ${NAMESPACE} --timeout=60s || true
+                            kubectl rollout status cronjob/status-reporter -n ${NAMESPACE} --timeout=60s || true
                         """
                     }
                 }
@@ -113,15 +113,15 @@ pipeline {
                     echo "Verifying CronJob configuration"
                     sh """
                         echo "=== CronJob Status ==="
-                        kubectl get cronjob qa-status-reporter -n ${NAMESPACE}
+                        kubectl get cronjob status-reporter -n ${NAMESPACE}
                         
                         echo ""
                         echo "=== CronJob Details ==="
-                        kubectl describe cronjob qa-status-reporter -n ${NAMESPACE} | grep -A 10 "Schedule"
+                        kubectl describe cronjob status-reporter -n ${NAMESPACE} | grep -A 10 "Schedule"
                         
                         echo ""
                         echo "=== ConfigMap ==="
-                        kubectl get configmap qa-status-reporter-config -n ${NAMESPACE} -o yaml | grep -A 10 "data:"
+                        kubectl get configmap status-reporter-config -n ${NAMESPACE} -o yaml | grep -A 10 "data:"
                     """
                 }
             }
@@ -139,7 +139,7 @@ pipeline {
                     
                     sh """
                         # Create test job
-                        kubectl create job --from=cronjob/qa-status-reporter ${jobName} -n ${NAMESPACE}
+                        kubectl create job --from=cronjob/status-reporter ${jobName} -n ${NAMESPACE}
                         
                         # Wait for pod to be created
                         echo "Waiting for pod to be created..."
@@ -151,7 +151,7 @@ pipeline {
                         
                         echo ""
                         echo "=== Test Pod Status ==="
-                        kubectl get pods -n ${NAMESPACE} -l app=qa-status-reporter --sort-by=.metadata.creationTimestamp | tail -5
+                        kubectl get pods -n ${NAMESPACE} -l app=status-reporter --sort-by=.metadata.creationTimestamp | tail -5
                         
                         # Wait a bit for the job to complete
                         echo ""
@@ -161,7 +161,7 @@ pipeline {
                         # Get logs
                         echo ""
                         echo "=== Test Job Logs ==="
-                        kubectl logs -n ${NAMESPACE} -l app=qa-status-reporter --tail=50 || echo "Pod not ready yet"
+                        kubectl logs -n ${NAMESPACE} -l app=status-reporter --tail=50 || echo "Pod not ready yet"
                         
                         # Check RabbitMQ queue
                         echo ""
@@ -189,8 +189,8 @@ pipeline {
                 
                 Next Steps:
                 1. Monitor queue: kubectl exec -n dev rabitmq-cluster-server-0 -- rabbitmqctl list_queues | grep slack
-                2. View logs: kubectl logs -n dev -l app=qa-status-reporter --tail=50
-                3. Check schedule: kubectl describe cronjob qa-status-reporter -n dev
+                2. View logs: kubectl logs -n dev -l app=status-reporter --tail=50
+                3. Check schedule: kubectl describe cronjob status-reporter -n dev
                 
                 Manual test run: ${params.RUN_TEST ? 'YES' : 'NO'}
                 ========================================

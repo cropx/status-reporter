@@ -50,7 +50,7 @@ The report is sent to RabbitMQ in the following format:
 ### 1. Build and Push Docker Image
 
 ```bash
-cd /Users/michael/workspace/qa-status-reporter
+cd /Users/michael/workspace/status-reporter
 chmod +x deploy.sh
 ./deploy.sh
 ```
@@ -61,23 +61,23 @@ Test the reporter manually before scheduling:
 
 ```bash
 # Create a one-time job from the cronjob
-kubectl create job --from=cronjob/qa-status-reporter test-run-1 -n dev
+kubectl create job --from=cronjob/status-reporter test-run-1 -n dev
 
 # Watch the job
 kubectl get jobs -n dev -w
 
 # Check logs
-kubectl logs -n dev -l app=qa-status-reporter --tail=100
+kubectl logs -n dev -l app=status-reporter --tail=100
 ```
 
 ### 3. Verify CronJob
 
 ```bash
 # Check cronjob status
-kubectl get cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
 
 # View schedule
-kubectl describe cronjob qa-status-reporter -n dev
+kubectl describe cronjob status-reporter -n dev
 ```
 
 ## Configuration
@@ -99,10 +99,10 @@ Edit `cronjob.yaml` to change:
 
 ```bash
 # View recent jobs
-kubectl get jobs -n dev | grep qa-status-reporter
+kubectl get jobs -n dev | grep status-reporter
 
 # View cronjob history
-kubectl get cronjob qa-status-reporter -n dev -o yaml
+kubectl get cronjob status-reporter -n dev -o yaml
 
 # Delete old jobs manually if needed
 kubectl delete job <job-name> -n dev
@@ -112,7 +112,7 @@ kubectl delete job <job-name> -n dev
 
 ```bash
 # Check if ServiceAccount has permissions
-kubectl auth can-i get pods --as=system:serviceaccount:dev:qa-status-reporter -n dev
+kubectl auth can-i get pods --as=system:serviceaccount:dev:status-reporter -n dev
 
 # Check RabbitMQ secret
 kubectl get secret rabitmq-cluster-default-user -n dev

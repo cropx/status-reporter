@@ -39,7 +39,7 @@ Full-featured pipeline with parameters and testing options.
 
 2. **Create New Pipeline Job:**
    - Click "New Item"
-   - Enter name: `qa-status-reporter-deploy`
+   - Enter name: `status-reporter-deploy`
    - Select "Pipeline"
    - Click OK
 
@@ -56,7 +56,7 @@ Full-featured pipeline with parameters and testing options.
 
 ```bash
 # Copy files to Jenkins server
-scp Jenkinsfile* jenkins-t375:/home/michael/qa-status-reporter/
+scp Jenkinsfile* jenkins-t375:/home/michael/status-reporter/
 
 # Create job using Jenkins CLI (if available)
 # Or use the UI method above
@@ -71,20 +71,20 @@ If you don't have Jenkins access, you can run the equivalent commands:
 ssh jenkins-t375
 
 # Navigate to directory
-cd ~/qa-status-reporter
+cd ~/status-reporter
 
 # Run the build and deploy steps manually
-docker build -t gcr.io/crx-dev-svc/qa-status-reporter:latest .
+docker build -t gcr.io/crx-dev-svc/status-reporter:latest .
 gcloud auth configure-docker gcr.io --quiet
-docker push gcr.io/crx-dev-svc/qa-status-reporter:latest
+docker push gcr.io/crx-dev-svc/status-reporter:latest
 kubectl apply -f cronjob.yaml
 
 # Verify
-kubectl get cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
 
 # Optional: Test
-kubectl create job --from=cronjob/qa-status-reporter test-run-$(date +%s) -n dev
-kubectl get pods -n dev -l app=qa-status-reporter -w
+kubectl create job --from=cronjob/status-reporter test-run-$(date +%s) -n dev
+kubectl get pods -n dev -l app=status-reporter -w
 ```
 
 ## Pipeline Stages
@@ -112,18 +112,18 @@ kubectl get pods -n dev -l app=qa-status-reporter -w
 
 ### Check CronJob Status
 ```bash
-kubectl get cronjob qa-status-reporter -n dev
-kubectl describe cronjob qa-status-reporter -n dev
+kubectl get cronjob status-reporter -n dev
+kubectl describe cronjob status-reporter -n dev
 ```
 
 ### View Logs
 ```bash
 # Latest run
-kubectl logs -n dev -l app=qa-status-reporter --tail=100
+kubectl logs -n dev -l app=status-reporter --tail=100
 
 # Specific job
 kubectl get jobs -n dev | grep qa-status
-kubectl logs -n dev job/qa-status-reporter-<timestamp>
+kubectl logs -n dev job/status-reporter-<timestamp>
 ```
 
 ### Check RabbitMQ Queue
@@ -135,20 +135,20 @@ kubectl exec -n dev rabitmq-cluster-server-0 -- \
 ### Manual Test
 ```bash
 # Create test job
-kubectl create job --from=cronjob/qa-status-reporter manual-test -n dev
+kubectl create job --from=cronjob/status-reporter manual-test -n dev
 
 # Watch pod
-kubectl get pods -n dev -l app=qa-status-reporter -w
+kubectl get pods -n dev -l app=status-reporter -w
 
 # View logs
-kubectl logs -n dev -l app=qa-status-reporter --tail=50
+kubectl logs -n dev -l app=status-reporter --tail=50
 ```
 
 ## Troubleshooting
 
 ### Build Fails
 - Check Docker daemon is running: `systemctl status docker`
-- Verify files exist: `ls -la ~/qa-status-reporter/`
+- Verify files exist: `ls -la ~/status-reporter/`
 - Check Dockerfile syntax
 
 ### GCR Push Fails
@@ -157,7 +157,7 @@ kubectl logs -n dev -l app=qa-status-reporter --tail=50
 
 ### CronJob Not Running
 - Check image pull: `kubectl describe pod <pod-name> -n dev`
-- Verify schedule: `kubectl describe cronjob qa-status-reporter -n dev`
+- Verify schedule: `kubectl describe cronjob status-reporter -n dev`
 - Check secrets exist: `kubectl get secret rabbitmq-gds-qa -n dev`
 
 ### RabbitMQ Connection Fails
