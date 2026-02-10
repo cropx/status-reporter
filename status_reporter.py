@@ -145,7 +145,8 @@ def send_to_rabbitmq(report):
     # Create message in required format
     message = {
         "message": markdown_text,
-        "source": "QA_LIVE"
+        "source": "QA_LIVE",
+        "channel": "C0ADXA2FXH9"
     }
     
     try:
